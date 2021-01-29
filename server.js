@@ -2,13 +2,13 @@
 import express from "express";
 import mongoose from "mongoose";
 import RoomsSchema, { messageSchema } from "./SchemaDBrooms.js";
-// import Message from "./SchemaMessages.js";
-// import Users from "./SchemaDBusers.js";
 import Pusher from "pusher";
 import cors from "cors";
 import morgan from "morgan";
+// import cookieParser from "cookie-parser";
 
 import roomsRouter from "./routes/roomsRouter.js";
+import { loginRouter, singupRouter } from "./routes/loginRouter.js";
 
 // app config
 const app = express();
@@ -26,6 +26,9 @@ const pusher = new Pusher({
 app.use(express.json());
 app.use(cors());
 app.use(morgan("dev"));
+
+// app.use(auth);
+// app.use(cookieParser)
 
 // DB config
 const connection_url =
@@ -49,18 +52,16 @@ const db = mongoose.connection;
 db.once("open", () => {
   console.log("Db is connected");
 
-  // const roomCollection = db.collection("messagecontents"); //.find({} { projection: { data: 1 } })
   const changeStreamRoom = RoomsSchema.watch();
 
   changeStreamRoom.on("change", (change) => {
-    // console.log(change);
-
     if (change.operationType === "insert") {
-      const roomDetails = change.fullDocument;
+      const { _id, name, data, users } = change.fullDocument;
       pusher.trigger("rooms", "inserted", {
-        id: roomDetails._id,
-        name: roomDetails.name,
-        data: roomDetails.data,
+        users,
+        _id,
+        name,
+        data,
       });
     } else if (change.operationType === "update") {
       const messageDetails = Object.values(
@@ -77,38 +78,23 @@ db.once("open", () => {
   });
 });
 
+// checking for JWT
+
+// const auth = (req, res, next) => {
+//   console.log(req.headers);
+//   if (!req.headers.user) {
+//     res.status(401).send("not authenticated");
+//   } else if (req.headers.user) {
+//     next();
+//   } else {
+//     res.status(401).send("error signing in");
+//   }
+// };
+
 // api routes
 app.get("/", (req, res) => res.status(200).send("hello world"));
-
+app.use("/auth", loginRouter, singupRouter);
 app.use("/rooms", roomsRouter);
-
-// app.get("/messages/sync", (req, res) => {
-//   Messages.find((err, data) => {
-//     err ? res.status(500).send(err) : res.status(200).send(data);
-//   });
-// });
-
-// app.post("/messages/new", (req, res) => {
-//   const dbMessage = req.body;
-
-//   Messages.create(dbMessage, (err, data) => {
-//     err ? res.status(500).send(err) : res.status(201).send(data);
-//   });
-// });
-
-// app.post("/messages/newroom", (req, res) => {
-//   const message = req.body;
-//   Messages.updateOne(
-//     {
-//       name: "testRoom1",
-//     },
-//     {
-//       $push: {
-//         data: message,
-//       },
-//     }
-//   );
-// });
 
 // listener
 app.listen(port, () => console.log(`Listening on localhost: ${port}`));

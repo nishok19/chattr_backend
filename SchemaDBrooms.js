@@ -13,4 +13,3 @@ const chatappSchema = new mongoose.Schema({
 });
 
 export default mongoose.model("messagecontents", chatappSchema);
-// export default mongoose.model("Message", messageSchema);
