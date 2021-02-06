@@ -5,6 +5,7 @@ import RoomsSchema, { messageSchema } from "./SchemaDBrooms.js";
 import Pusher from "pusher";
 import cors from "cors";
 import morgan from "morgan";
+import User from "./SchemaDBusers.js";
 // import cookieParser from "cookie-parser";
 
 import roomsRouter from "./routes/roomsRouter.js";
@@ -64,14 +65,53 @@ db.once("open", () => {
         data,
       });
     } else if (change.operationType === "update") {
-      const messageDetails = Object.values(
-        change.updateDescription.updatedFields
-      )[1];
-      console.log(change);
-      pusher.trigger("rooms", "updated", {
-        roomId: change.documentKey,
-        data: messageDetails,
-      });
+      // const messageDetails = Object.values(
+      //   change.updateDescription.updatedFields
+      // )[1];
+      const messageDetails = change.updateDescription.updatedFields;
+      //
+      const updateType = Object.keys(messageDetails)
+        .map((key) => {
+          if (key.indexOf(".") >= 0) return key;
+        })
+        .filter((k) => k != undefined)
+        .map((el) => el.split(".")[0])[0];
+
+      const exsumptionType = Object.keys(messageDetails)
+        .map((key) => {
+          if (key === "data") return key;
+        })
+        .filter((k) => k != undefined)[0];
+      // console.log("exsumption", exsumptionType);
+      //
+      if (updateType === "data" || exsumptionType === "data") {
+        pusher.trigger("rooms", "updated", {
+          roomId: change.documentKey,
+          // data: messageDetails,
+          data: messageDetails,
+          type: "messageUpdate",
+        });
+      } else if (updateType === "users") {
+        User.find({ email: Object.values(messageDetails)[0] }).then(
+          (user) => {
+            const userDetails = user.map(({ _id, name, photoURL, email }) => ({
+              _id,
+              name,
+              photoURL,
+              email,
+            }));
+            pusher.trigger("rooms", "updated", {
+              roomId: change.documentKey,
+              user: messageDetails,
+              userDetails: userDetails,
+              type: "userUpdate",
+            });
+          },
+          (err) => res.send(err)
+        );
+      }
+
+      console.log(messageDetails);
     } else {
       console.log("Error triggering Pusher Room");
     }

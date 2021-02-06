@@ -21,21 +21,21 @@ loginRouter
       User.findOne({ email: userEmail }).then(
         (user) => {
           if (user) {
-            if (user.provider.uid == req.body.uid) {
-              // The proper user data is sendt only when UID is correct
-              res.json({
-                user: {
-                  email: user.email,
-                  name: user.name,
-                  rooms: user.rooms,
-                  _id: user._id,
-                  photoURL: user?.photoURL,
-                },
-                userExists: true,
-              });
-            } else {
-              res.send("something wrong with the uid");
-            }
+            // if (user.provider.uid == req.body.uid) {
+            // The proper user data is sendt only when UID is correct
+            res.json({
+              user: {
+                email: user.email,
+                name: user.name,
+                rooms: user.rooms,
+                _id: user._id,
+                photoURL: user?.photoURL,
+              },
+              userExists: true,
+            });
+            // } else {
+            //   res.send("something wrong with the uid");
+            // }
           } else {
             res.json({ userExists: false });
           }

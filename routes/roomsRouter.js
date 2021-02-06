@@ -33,9 +33,33 @@ roomsRouter
             },
           }).then(
             (data) => {
-              res.statusCode = 200;
-              res.setHeader("Content-Type", "application/json");
-              res.json(data);
+              const people = data.map((room) => room.users);
+              const allPeople = [...new Set(people.flat(1))];
+              Users.find({
+                email: {
+                  $in: allPeople,
+                },
+              }).then(
+                (people) => {
+                  res.statusCode = 200;
+                  res.setHeader("Content-Type", "application/json");
+                  const peoples = people.map(
+                    ({ _id, name, photoURL, email }) => ({
+                      _id,
+                      name,
+                      photoURL,
+                      email,
+                    })
+                  );
+                  res.json({
+                    peoples,
+                    data,
+                  });
+                  // res.json(allPeople);
+                  // res.json(data);
+                },
+                (err) => res.send(err)
+              );
             },
             (err) => res.status(500).send(err)
           );
@@ -47,57 +71,38 @@ roomsRouter
   .post((req, res, next) => {
     const newRoom = req.body;
     // const users = req.body.users;
-    res.statusCode = 201;
-    res.setHeader("Content-Type", "application/json");
-    console.log("room inserted", newRoom);
+    // res.statusCode = 201;
+    // res.setHeader("Content-Type", "application/json");
+    // console.log("room inserted", newRoom);
     Messages.create(newRoom).then(
       (dataRoom) => {
-        res.statusCode = 201;
-        res.setHeader("Content-Type", "application/json");
+        // res.statusCode = 201;
+        // res.send(dataRoom);
         //
         Users.find({
-          name: {
-            $in: req.body.users,
+          email: {
+            $in: dataRoom.users,
           },
         }).then(
           (users) => {
-            console.log(users);
-            // users.map((user) => user.rooms.push(data.name));
-            // users.save().then(
-            //   (u) => res.status(200),
-            //   (err) => res.status(500).send(err)
-            // );
             users.map((user) => {
               Users.findOneAndUpdate(
-                { name: user.name },
+                { email: user.email },
                 // { $set: { rooms:  } },
                 { $push: { rooms: dataRoom.name } },
-                { new: true },
+                { new: true, useFindAndModify: false },
                 (err, doc) => {
-                  if (err) {
-                    console.log(
-                      "Something wrong when updating roomName to Users!"
-                    );
-                  }
-                  console.log(doc);
+                  if (err) res.status(404).send(err);
                 }
               );
             });
-            res.json(req.body);
           },
           (err) => res.status(500).send(err)
         );
-        //
+        res.json(dataRoom);
       },
       (err) => res.status(500).send(err)
     );
-    // Messages.create(newRoom, (err, data) => {
-    //   if(err) {
-    //       res.status(500).send(err)
-    //   } else {
-    //      res.status(201).send(data);
-    //   }
-    // });
   })
   .put((req, res, next) => {
     res.send("for /rooms PUT is not yet supported");
@@ -121,9 +126,44 @@ roomsRouter
       err ? res.status(500).send(err) : res.status(200).send(data);
     });
   })
-  .post((req, res, next) =>
-    res.send("Put opeeation not yet supported in /rooms/:roomId")
-  )
+  .post((req, res, next) => {
+    // res.send("Put opeeation not yet supported in /rooms/:roomId")
+
+    // User.findOne({ email: req.body.user }).then(
+    //   (user) => {
+    //     if (user) {
+    //       // if (user) {
+
+    //         res.json({ accessToken, user, userExists: true });
+    //       // } else {
+    //       //   res.send("something wrong with the uid");
+    //       // }
+    //     } else {
+    //       res.json({ userExists: false });
+    //     }
+    //   },
+    //   (err) => res.send(err)
+    // );
+
+    Users.findOneAndUpdate(
+      { email: req.body.user },
+      // { $set: { rooms:  } },
+      { $push: { rooms: req.body.room } },
+      { new: true, useFindAndModify: false },
+      (err, doc) => {
+        if (err) res.status(404).send(err);
+        Messages.findByIdAndUpdate(
+          req.params.roomId,
+          // { $set: { rooms:  } },
+          { $push: { users: req.body.user } },
+          { new: true, useFindAndModify: false },
+          (err, doc) => {
+            if (err) res.status(404).send(err);
+          }
+        );
+      }
+    );
+  })
   .put((req, res, next) => {
     Messages.findById(req.params.roomId).then((room) => {
       if (room) {
