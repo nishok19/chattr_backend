@@ -1,7 +1,8 @@
 import express from "express";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
-import User from "../SchemaDBusers.js";
+import Users from "../SchemaDBusers.js";
+import Messages from "../SchemaDBrooms.js";
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ loginRouter
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
       if (err) return res.sendStatus(403);
       const userEmail = user.email;
-      User.findOne({ email: userEmail }).then(
+      Users.findOne({ email: userEmail }).then(
         (user) => {
           if (user) {
             // if (user.provider.uid == req.body.uid) {
@@ -47,7 +48,7 @@ loginRouter
   .post((req, res, next) => {
     const userEmail = req.body.email;
     if (req.body.loginType == "google") {
-      User.findOne({ email: userEmail }).then(
+      Users.findOne({ email: userEmail }).then(
         (user) => {
           if (user) {
             if (user.provider.uid == req.body.uid) {
@@ -68,7 +69,7 @@ loginRouter
         (err) => res.send(err)
       );
     } else if (req.body.loginType == "emailandpassword") {
-      User.findOne({ email: userEmail }).then(
+      Users.findOne({ email: userEmail }).then(
         (user) => {
           if (user) {
             if (user.password == req.body.password) {
@@ -78,7 +79,17 @@ loginRouter
                 userObj,
                 process.env.ACCESS_TOKEN_SECRET
               );
-              res.json({ accessToken, user, userExists: true });
+              res.json({
+                accessToken,
+                user: {
+                  _id: user._id,
+                  name: user.name,
+                  rooms: user.rooms,
+                  photoURL: user?.photURL,
+                  email: user.email,
+                },
+                userExists: true,
+              });
             } else {
               res.send("something wrong with the password");
             }
@@ -86,14 +97,55 @@ loginRouter
             res.json({ userExists: false });
           }
         },
-        (err) => res.send(err)
+        (err) => res.send("error logging in", err)
       );
     }
+  })
+  .put((req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+    var jwtUser = null;
+    if (token == null) return res.sendStatus(401);
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+      if (err) return res.sendStatus(403);
+      jwtUser = user.email;
 
-    // const user = { user: userEmail };
-
-    // const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET);
-    // res.json({ accessToken, user });
+      // if (req.body.change === "userNameUpdate") {
+      Users.findOneAndUpdate(
+        { email: jwtUser },
+        { name: req.body.newUserName },
+        { new: true, useFindAndModify: false },
+        (err, { _id, name, email, photoURL, rooms }) => {
+          if (err) res.status(404).send(err);
+          res.json({ _id, name, email, photoURL, rooms });
+        }
+      );
+      // }
+    });
+  })
+  .delete((req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+    var jwtUser = null;
+    if (token == null) return res.sendStatus(401);
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+      if (err) return res.sendStatus(403);
+      jwtUser = user.email;
+      Users.findOneAndDelete({ email: jwtUser }, (err, docs) => {
+        if (err) return res.sendStatus(403).send(err);
+        docs.rooms.map((room) => {
+          Messages.findOneAndUpdate(
+            { name: room },
+            { $pull: { users: docs.email } },
+            { new: true, useFindAndModify: false },
+            (err, doc) => {
+              if (err) res.status(404).send(err);
+              res.send(doc);
+            }
+          );
+        });
+      });
+    });
   });
 
 const singupRouter = express.Router();
@@ -109,11 +161,11 @@ singupRouter
     const email = req.body.email;
 
     // Find the whether the user already Exists ???
-    User.findOne({ email }).then(
+    Users.findOne({ email }).then(
       (user) => {
         if (user == null) {
           // creating new user
-          User.create(req.body).then((user) => {
+          Users.create(req.body).then((user) => {
             res.json({ user, userExists: false });
           });
         } else {
@@ -125,7 +177,7 @@ singupRouter
   })
   .delete((req, res, next) => {
     const email = req.body.email;
-    User.deleteOne({ email }).then((user) => {
+    Users.deleteOne({ email }).then((user) => {
       res.json("deleted successfully");
     });
   });

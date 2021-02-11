@@ -5,7 +5,7 @@ import RoomsSchema, { messageSchema } from "./SchemaDBrooms.js";
 import Pusher from "pusher";
 import cors from "cors";
 import morgan from "morgan";
-import User from "./SchemaDBusers.js";
+import Users from "./SchemaDBusers.js";
 // import cookieParser from "cookie-parser";
 
 import roomsRouter from "./routes/roomsRouter.js";
@@ -54,6 +54,7 @@ db.once("open", () => {
   console.log("Db is connected");
 
   const changeStreamRoom = RoomsSchema.watch();
+  const changeStreamUser = Users.watch();
 
   changeStreamRoom.on("change", (change) => {
     if (change.operationType === "insert") {
@@ -65,9 +66,6 @@ db.once("open", () => {
         data,
       });
     } else if (change.operationType === "update") {
-      // const messageDetails = Object.values(
-      //   change.updateDescription.updatedFields
-      // )[1];
       const messageDetails = change.updateDescription.updatedFields;
       //
       const updateType = Object.keys(messageDetails)
@@ -79,11 +77,11 @@ db.once("open", () => {
 
       const exsumptionType = Object.keys(messageDetails)
         .map((key) => {
-          if (key === "data") return key;
+          if (key === "data" || key === "users") return key;
         })
         .filter((k) => k != undefined)[0];
-      // console.log("exsumption", exsumptionType);
-      //
+      console.log("rooms pusher", updateType, exsumptionType);
+
       if (updateType === "data" || exsumptionType === "data") {
         pusher.trigger("rooms", "updated", {
           roomId: change.documentKey,
@@ -91,31 +89,68 @@ db.once("open", () => {
           data: messageDetails,
           type: "messageUpdate",
         });
-      } else if (updateType === "users") {
-        User.find({ email: Object.values(messageDetails)[0] }).then(
-          (user) => {
-            const userDetails = user.map(({ _id, name, photoURL, email }) => ({
-              _id,
-              name,
-              photoURL,
-              email,
-            }));
-            pusher.trigger("rooms", "updated", {
-              roomId: change.documentKey,
-              user: messageDetails,
-              userDetails: userDetails,
-              type: "userUpdate",
-            });
-          },
-          (err) => res.send(err)
-        );
+      } else if (updateType === "users" || exsumptionType === "users") {
+        // object.values(msgDetails)[0] return true if the user is deleted and returns false if user is added
+        const isUserDeleted = Array.isArray(Object.values(messageDetails)[0]);
+        console.log("user deleted", isUserDeleted);
+        if (isUserDeleted) {
+          pusher.trigger("rooms", "updated", {
+            roomId: change.documentKey,
+            usersRemain: Object.values(messageDetails)[0],
+            type: "userDelete",
+          });
+        } else {
+          Users.find({ email: Object.values(messageDetails)[0] }).then(
+            (user) => {
+              const userDetails = user.map(
+                ({ _id, name, photoURL, email }) => ({
+                  _id,
+                  name,
+                  photoURL,
+                  email,
+                })
+              );
+              pusher.trigger("rooms", "updated", {
+                roomId: change.documentKey,
+                user: messageDetails,
+                userDetails: userDetails,
+                type: "userUpdate",
+              });
+            },
+            (err) => res.send(err)
+          );
+        }
       }
-
-      console.log(messageDetails);
+    } else if (change.operationType === "delete") {
+      console.log("operation type...", change);
+      pusher.trigger("rooms", "deleted", {
+        roomId: change.documentKey,
+      });
     } else {
-      console.log("Error triggering Pusher Room");
+      console.log("error triggering pusher...", change);
     }
   });
+
+  // changeStreamUser.on("change", (change) => {
+  //   console.log("user pusher", change);
+  //   if (change.operationType === "update") {
+  //     const user = change.updateDescription.updatedFields;
+  //     const updateType = Object.keys(user)
+  //       .map((key) => {
+  //         if (key.indexOf(".") >= 0) return key;
+  //       })
+  //       .filter((k) => k != undefined)
+  //       .map((el) => el.split(".")[0])[0];
+
+  //     if (updateType === "users") {
+  //       pusher.trigger("users", "updated", {
+  //         roomId: change.documentKey,
+  //         data: user,
+  //         //  type: "messageUpdate",
+  //       });
+  //     }
+  //   }
+  // });
 });
 
 // checking for JWT

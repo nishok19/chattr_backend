@@ -17,16 +17,13 @@ roomsRouter
     if (token == null) return res.sendStatus(401);
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
       if (err) return res.sendStatus(403);
-      // res.send(user);
       jwtUser = user.email;
-      // next();
-
       // end of testing jwt
       Users.findOne({ email: jwtUser }).then(
         (user) => {
           if (!user) return res.status(404).json({ isUserFound: "false" });
           var userRooms = user.rooms;
-          // console.log("theuser", userRooms);
+
           Messages.find({
             name: {
               $in: userRooms,
@@ -55,8 +52,6 @@ roomsRouter
                     peoples,
                     data,
                   });
-                  // res.json(allPeople);
-                  // res.json(data);
                 },
                 (err) => res.send(err)
               );
@@ -70,15 +65,9 @@ roomsRouter
   })
   .post((req, res, next) => {
     const newRoom = req.body;
-    // const users = req.body.users;
-    // res.statusCode = 201;
-    // res.setHeader("Content-Type", "application/json");
-    // console.log("room inserted", newRoom);
+
     Messages.create(newRoom).then(
       (dataRoom) => {
-        // res.statusCode = 201;
-        // res.send(dataRoom);
-        //
         Users.find({
           email: {
             $in: dataRoom.users,
@@ -127,24 +116,6 @@ roomsRouter
     });
   })
   .post((req, res, next) => {
-    // res.send("Put opeeation not yet supported in /rooms/:roomId")
-
-    // User.findOne({ email: req.body.user }).then(
-    //   (user) => {
-    //     if (user) {
-    //       // if (user) {
-
-    //         res.json({ accessToken, user, userExists: true });
-    //       // } else {
-    //       //   res.send("something wrong with the uid");
-    //       // }
-    //     } else {
-    //       res.json({ userExists: false });
-    //     }
-    //   },
-    //   (err) => res.send(err)
-    // );
-
     Users.findOneAndUpdate(
       { email: req.body.user },
       // { $set: { rooms:  } },
@@ -177,8 +148,54 @@ roomsRouter
         res.status(404).send("Room not found");
       }
     });
+  })
+  .delete((req, res, next) => {
+    Messages.findByIdAndDelete(req.params.roomId, (err, doc) => {
+      if (err) res.send(err);
+      if (doc) {
+        doc.users.map((user) => {
+          Users.findOneAndUpdate(
+            { email: user },
+            { $pull: { rooms: doc.name } },
+            { new: true, useFindAndModify: false },
+            (err, doc) => {
+              if (err) res.send(err);
+            }
+          );
+        });
+      }
+      res.send(doc);
+    });
   });
 
-// .delete();
+roomsRouter.route("/:roomId/user/:user").delete((req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  var jwtUser = null;
+  if (token == null) return res.sendStatus(401);
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    jwtUser = user.email;
+
+    Messages.findByIdAndUpdate(
+      req.params.roomId,
+      { $pull: { users: req.params.user } },
+      { new: true, useFindAndModify: false },
+      (err, doc) => {
+        if (err) res.status(404).send(err);
+
+        Users.findOneAndUpdate(
+          { email: jwtUser },
+          { $pull: { rooms: doc.name } },
+          { new: true, useFindAndModify: false },
+          (err, doc) => {
+            if (err) res.send(err);
+            res.send(doc);
+          }
+        );
+      }
+    );
+  });
+});
 
 export default roomsRouter;
