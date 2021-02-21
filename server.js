@@ -83,6 +83,7 @@ db.once("open", () => {
       console.log("rooms pusher", updateType, exsumptionType);
 
       if (updateType === "data" || exsumptionType === "data") {
+        console.log("msgUpdate", messageDetails);
         pusher.trigger("rooms", "updated", {
           roomId: change.documentKey,
           // data: messageDetails,

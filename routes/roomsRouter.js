@@ -25,7 +25,7 @@ roomsRouter
           var userRooms = user.rooms;
 
           Messages.find({
-            name: {
+            _id: {
               $in: userRooms,
             },
           }).then(
@@ -78,7 +78,8 @@ roomsRouter
               Users.findOneAndUpdate(
                 { email: user.email },
                 // { $set: { rooms:  } },
-                { $push: { rooms: dataRoom.name } },
+                // { $push: { rooms: dataRoom.name } },
+                { $push: { rooms: dataRoom._id } },
                 { new: true, useFindAndModify: false },
                 (err, doc) => {
                   if (err) res.status(404).send(err);
