@@ -54,7 +54,7 @@ db.once("open", () => {
   console.log("Db is connected");
 
   const changeStreamRoom = RoomsSchema.watch();
-  const changeStreamUser = Users.watch();
+  // const changeStreamUser = Users.watch();
 
   changeStreamRoom.on("change", (change) => {
     if (change.operationType === "insert") {
@@ -93,7 +93,6 @@ db.once("open", () => {
       } else if (updateType === "users" || exsumptionType === "users") {
         // object.values(msgDetails)[0] return true if the user is deleted and returns false if user is added
         const isUserDeleted = Array.isArray(Object.values(messageDetails)[0]);
-        console.log("user deleted", isUserDeleted);
         if (isUserDeleted) {
           pusher.trigger("rooms", "updated", {
             roomId: change.documentKey,
@@ -104,13 +103,15 @@ db.once("open", () => {
           Users.find({ email: Object.values(messageDetails)[0] }).then(
             (user) => {
               const userDetails = user.map(
-                ({ _id, name, photoURL, email }) => ({
+                ({ _id, name, photoURL, email, rooms }) => ({
                   _id,
                   name,
                   photoURL,
                   email,
+                  rooms,
                 })
               );
+              console.log(userDetails);
               pusher.trigger("rooms", "updated", {
                 roomId: change.documentKey,
                 user: messageDetails,

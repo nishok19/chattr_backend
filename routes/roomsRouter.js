@@ -117,24 +117,34 @@ roomsRouter
     });
   })
   .post((req, res, next) => {
-    Users.findOneAndUpdate(
-      { email: req.body.user },
-      // { $set: { rooms:  } },
-      { $push: { rooms: req.body.room } },
-      { new: true, useFindAndModify: false },
-      (err, doc) => {
-        if (err) res.status(404).send(err);
-        Messages.findByIdAndUpdate(
-          req.params.roomId,
+    Messages.findById(req.body.room, (err, doc) => {
+      if (err) res.send(err);
+      if (doc) {
+        Users.findOneAndUpdate(
+          { email: req.body.user },
           // { $set: { rooms:  } },
-          { $push: { users: req.body.user } },
+          { $push: { rooms: doc._id } },
           { new: true, useFindAndModify: false },
           (err, doc) => {
             if (err) res.status(404).send(err);
+            if (doc) {
+              Messages.findByIdAndUpdate(
+                req.params.roomId,
+                // { $set: { rooms:  } },
+                { $push: { users: req.body.user } },
+                { new: true, useFindAndModify: false },
+                (err, doc) => {
+                  if (err) res.status(404).send(err);
+                  if (doc) res.json({ userExists: true });
+                }
+              );
+            } else {
+              res.json({ userExists: false });
+            }
           }
         );
       }
-    );
+    });
   })
   .put((req, res, next) => {
     Messages.findById(req.params.roomId).then((room) => {
@@ -143,7 +153,7 @@ roomsRouter
         res.setHeader("Content-Type", "application/json");
         room.data.push(req.body);
         room.save().then((room) => {
-          res.json(room);
+          res.status(204);
         });
       } else {
         res.status(404).send("Room not found");
@@ -157,7 +167,7 @@ roomsRouter
         doc.users.map((user) => {
           Users.findOneAndUpdate(
             { email: user },
-            { $pull: { rooms: doc.name } },
+            { $pull: { rooms: doc._id } },
             { new: true, useFindAndModify: false },
             (err, doc) => {
               if (err) res.send(err);
@@ -186,8 +196,8 @@ roomsRouter.route("/:roomId/user/:user").delete((req, res, next) => {
         if (err) res.status(404).send(err);
 
         Users.findOneAndUpdate(
-          { email: jwtUser },
-          { $pull: { rooms: doc.name } },
+          { email: req.params.user },
+          { $pull: { rooms: doc._id } },
           { new: true, useFindAndModify: false },
           (err, doc) => {
             if (err) res.send(err);
