@@ -134,8 +134,8 @@ loginRouter
       Users.findOneAndDelete({ email: jwtUser }, (err, docs) => {
         if (err) return res.sendStatus(403).send(err);
         docs.rooms.map((room) => {
-          Messages.findOneAndUpdate(
-            { name: room },
+          Messages.findByIdAndUpdate(
+            room._id,
             { $pull: { users: docs.email } },
             { new: true, useFindAndModify: false },
             (err, doc) => {
